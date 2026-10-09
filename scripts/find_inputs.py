@@ -110,8 +110,8 @@ def main():
         found[role] = (path, image)
 
     missing = []
-    if "disc" not in found:
-        missing.append("the European GameCube Animal Crossing disc image (GAFP01; .iso, .gcm or .ciso)")
+#    if "disc" not in found:
+#        missing.append("the European GameCube Animal Crossing disc image (GAFP01; .iso, .gcm or .ciso)")
     if "jp" not in found:
         missing.append("the Japanese N64 Animal Forest ROM (Doubutsu no Mori, NUS-NAFJ; .z64, .v64 or .n64)")
     if missing or bad:

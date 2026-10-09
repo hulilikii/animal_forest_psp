@@ -192,6 +192,7 @@ static void ge_draw_to_target(void) {
     gMap.x0 = 0;
     gMap.x1 = (int)gTarget.width;
     gMap.y1 = (int)gTarget.height;
+    gMap.wide = gMap.wide_fill = false;
     gfx_set_viewport();
     gfx_set_scissor();
 }

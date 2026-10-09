@@ -254,6 +254,12 @@ void gfx_fill_rect(uint32_t ulx, uint32_t uly, uint32_t lrx, uint32_t lry) {
     /* One colour over the whole target, neither blended nor tested: every pixel
      * gets that colour and keeps its coverage, which RDRAM can be told directly. */
     bool known = to_rt && full && cycle != G_CYC_FILL && !gGu.blend && !gGu.alpha_test && gfx_target_fill_known(true);
+    if (gMap.wide_fill && !to_rt && x0 <= 0 && x1 >= N64_SCREEN_W - 1) {
+        /* widescreen: a colour across the picture's whole width (a letterbox bar, a fade) goes on to the screen's edges */
+        RT_LOG_ONCE("gfx: widescreen: a fill across the picture (%d rows) goes on to the screen's edges", (int)(y1 - y0));
+        x0 = gMap.crop_x - 1.0f;
+        x1 = gMap.crop_x + (float)gMap.x1 / gMap.scale_x + 1.0f;
+    }
     bool drawn = gfx_draw_rect(x0, y0, x1, y1, 0, 0, 0, 0, color, NULL, false);
     if (to_rt) {
         sceGuStencilFunc(GU_ALWAYS, 0xFF, 0xFF);

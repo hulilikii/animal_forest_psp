@@ -52,8 +52,16 @@ void mat_mul(Mat4 out, const Mat4 a, const Mat4 b) {
 }
 
 static void update_mvp(void) {
-    if (gRsp.mvp_dirty) {
+    /* In widescreen the viewport (and so the factor) can change under a matrix that has not. */
+    float k = gfx_wide_k();
+    if (gRsp.mvp_dirty || k != gRsp.mvp_k) {
         mat_mul(gRsp.mvp, gRsp.mv_stack[gRsp.mv_depth], gRsp.proj);
+        if (k != 1.0f) {
+            for (int i = 0; i < 4; i++) {
+                gRsp.mvp[i][0] *= k; /* clip x */
+            }
+        }
+        gRsp.mvp_k = k;
         gRsp.mvp_dirty = false;
     }
 }

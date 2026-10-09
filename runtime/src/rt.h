@@ -399,7 +399,7 @@ bool rt_gfx_yielded(void);
 bool rt_gfx_idle(void);
 /* Debug tools */
 void rt_gfx_capture_frame(uint32_t n); /* the next task's frame goes to capture_<n>.bmp (gfx_debug.c) */
-void rt_gfx_toggle_stretch(void);  /* START + SELECT: the picture stretched, or at 4:3 (gfx_frame.c) */
+void rt_gfx_toggle_stretch(void);  /* START + SELECT: widescreen, stretched or at 4:3, in turn (gfx_frame.c) */
 bool rt_gfx_replay(void);          /* replay.txt: renders a dumped frame forever (gfx_debug.c) */
 
 /* ---- audio (audio.c; the Media Engine in audio/me_audio.h) -------------- */

@@ -221,9 +221,13 @@ it: copy them there from `work/text/`.
 The save (`flash.bin`) and clock offset (`rtc.bin`) are written next to them.
 Controls: cross A, square B, L Z, R R, START start, triangle and circle C-up
 and C-right, d-pad and stick as themselves; SELECT + d-pad gives the four C
-buttons and SELECT + L the N64's L. START + SELECT switches between the
-picture stretched over the whole screen and at its own 4:3 shape between black
-bars (a file `no_stretch.txt` next to the EBOOT starts the game at 4:3).
+buttons and SELECT + L the N64's L. START + SELECT cycles the picture
+through widescreen (the default: the 3D view widened to the screen's 16:9, the
+menus and text at their own 4:3 shape in the middle), widescreen with the view
+only (no fill extension, no margin clears), stretched over the whole screen,
+and at 4:3 between black bars. A file `no_widescreen.txt` next to the EBOOT
+starts the game stretched, `no_stretch.txt` at 4:3, `wide_view.txt` in the
+view-only widescreen.
 
 ## Debugging
 

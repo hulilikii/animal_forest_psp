@@ -59,12 +59,34 @@
 #define PILLAR_X ((PSP_SCREEN_W - PILLAR_W) / 2)
 
 /*
+ * Widescreen (the default; START + SELECT cycles the three shapes): the shape
+ * of the pillar map -- square N64 pixels, the 4:3 picture in the middle -- but
+ * what the game draws across the whole width of that picture is carried on out
+ * to the screen's edges, as oot-PSP does. A full-width viewport gets the whole
+ * screen's width and the projection's x is narrowed by the ratio (gfx_wide_k),
+ * so the 3D view sees more to either side at the same scale and height (Hor+),
+ * and 2D drawn through such a viewport stays exactly where the 4:3 picture
+ * has it; plain full-width fills reach the edges too (gfx_fill_rect). N64
+ * pixel x = WIDE_CROP_X is the screen's left edge.
+ *
+ * The change has two parts that can be told apart on a device, as two levels
+ * of the START + SELECT cycle: the view (viewport, scissor, projection: only
+ * what the GE has always been asked to do) and the rest (fills, and a clear
+ * of just the margins under a partial scissor, which nothing else in the
+ * port does).
+ */
+#define WIDE_SCALE SCALE_Y
+#define WIDE_CROP_X (N64_SCREEN_W / 2.0f - (PSP_SCREEN_W / 2.0f) / WIDE_SCALE)
+
+/*
  * N64 pixels -> the GE's target: the screen (scaled, cropped) or a render
  * target (1:1). x0..x1 and 0..y1 are the picture's bounds on the target.
  */
 typedef struct {
     float scale_x, scale_y, crop_x, crop_y;
     int x0, x1, y1;
+    bool wide;      /* the widescreen map: a full-width viewport (and scissor) is carried out to x0..x1 */
+    bool wide_fill; /* ... and plain full-width fills too, and the margins are cleared every frame */
 } ScreenMap;
 extern ScreenMap gMap;
 
@@ -227,6 +249,7 @@ typedef struct {
     int mv_depth;
     Mat4 proj __attribute__((aligned(16)));
     bool mvp_dirty;
+    float mvp_k; /* the widescreen factor (gfx_wide_k) mvp's x was made with */
     Mat4 mvp __attribute__((aligned(16)));
     bool lights_dirty;
     int num_lights;
@@ -746,6 +769,8 @@ void gfx_finish_list(void);
 void gfx_screen_images_drawn(void);
 void gfx_set_viewport(void);
 void gfx_ge_viewport(int* cx, int* cy, int* w, int* h);
+/* Widescreen: the factor the projection's x (clip x, column 0) is multiplied by; 1 if the viewport is not widened. */
+float gfx_wide_k(void);
 void gfx_set_scissor(void);
 void gfx_set_projection(void);
 void gfx_upload_projection(int variant);

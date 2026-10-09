@@ -450,8 +450,11 @@ void gfx_update_snap(void) {
     gfx_ge_viewport(&cx, &cy, &w, &h);
     float hw = (float)w * 0.25f, hh = (float)h * 0.25f;
     float tx = ((float)cx - SNAP_PHASE) * 0.5f, ty = ((float)cy - SNAP_PHASE) * 0.5f;
-    if (hw != sSnap.hw || hh != sSnap.hh || tx != sSnap.tx || ty != sSnap.ty || p[0][0] != sSnap.p00 ||
-        p[1][0] != sSnap.p10 || p[0][1] != sSnap.p01 || p[1][1] != sSnap.p11 || p[0][3] != sSnap.p03 ||
+    /* clip x is narrowed in widescreen (gfx_wide_k), as the GE's projection and mvp have it */
+    float k = gfx_wide_k();
+    float p00 = p[0][0] * k, p10 = p[1][0] * k;
+    if (hw != sSnap.hw || hh != sSnap.hh || tx != sSnap.tx || ty != sSnap.ty || p00 != sSnap.p00 ||
+        p10 != sSnap.p10 || p[0][1] != sSnap.p01 || p[1][1] != sSnap.p11 || p[0][3] != sSnap.p03 ||
         p[1][3] != sSnap.p13) {
         sSnapGen++;
     }
@@ -459,8 +462,8 @@ void gfx_update_snap(void) {
     sSnap.hh = hh;
     sSnap.tx = tx;
     sSnap.ty = ty;
-    sSnap.p00 = p[0][0];
-    sSnap.p10 = p[1][0];
+    sSnap.p00 = p00;
+    sSnap.p10 = p10;
     sSnap.p01 = p[0][1];
     sSnap.p11 = p[1][1];
     sSnap.p03 = p[0][3];

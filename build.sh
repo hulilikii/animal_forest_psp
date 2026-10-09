@@ -102,8 +102,8 @@ else
 fi
 
 # --- English text, from the disc -----------------------------------------
-step "Building the English text from the disc"
-scripts/make_text_en.sh "$DISC"
+#step "Building the English text from the disc"
+#scripts/make_text_en.sh "$DISC"
 
 # --- the EBOOT -----------------------------------------------------------
 step "Building the EBOOT"

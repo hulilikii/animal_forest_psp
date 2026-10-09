@@ -223,8 +223,8 @@ static void poll_pad(void) {
     }
     sCaptureHeld = capture;
 
-    /* START + SELECT: the picture stretched over the screen, or at 4:3
-     * between black bars. Kept from the game as well. */
+    /* START + SELECT: the picture in widescreen, stretched over the screen,
+     * or at 4:3 between black bars, in turn. Kept from the game as well. */
     static bool sStretchHeld = false;
     bool stretch = shift && (pad.Buttons & PSP_CTRL_START);
     if (stretch) {

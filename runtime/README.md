@@ -121,7 +121,9 @@ file.
 | SELECT + R (not a file) | a capture: `capture_N.state` and `capture_N.bmp` (see "Captures") | capture.c |
 | `auto_capture.txt` | take captures at these controller polls, as SELECT + R would (polls count from the resume in a resumed game) | si.c |
 | `resume.txt` | `capture_N.state`: start the game from that capture instead of booting it | capture.c |
-| `no_stretch.txt` | start with the picture at 4:3 between black bars (START + SELECT switches) | gfx_frame.c |
+| `no_stretch.txt` | start with the picture at 4:3 between black bars (START + SELECT cycles widescreen, widescreen with the view only, stretched, 4:3) | gfx_frame.c |
+| `no_widescreen.txt` | start with the picture stretched over the screen, as before there was a widescreen (START + SELECT cycles) | gfx_frame.c |
+| `wide_view.txt` | start in widescreen with the view only: the 3D view and the viewport/scissor widened, but no fill extension and no margin clears (to tell those apart from the view when something looks wrong); with `log.txt` the first sixteen different viewports are logged | gfx_frame.c |
 | `dump_frames.txt` | save the RDRAM of these graphics tasks | gfx_debug.c |
 | `replay.txt` | `<dump> <task> [step]`: render a dump forever instead of booting; the dump may be a capture, with task 0 for its own | gfx_debug.c |
 | `trace_tasks.txt` | log every draw of these graphics tasks | gfx_debug.c |

@@ -37,25 +37,37 @@ GfxStats gStats;
 
 /* ---- the screen map ----------------------------------------------------- */
 
-static const ScreenMap kStretched = { SCALE_X, SCALE_Y, CROP_X, CROP_Y, 0, PSP_SCREEN_W, PSP_SCREEN_H };
+static const ScreenMap kStretched = { SCALE_X, SCALE_Y, CROP_X, CROP_Y, 0, PSP_SCREEN_W, PSP_SCREEN_H, false, false };
 #define PILLAR_SCALE_X ((float)PILLAR_W / (N64_SCREEN_W - 2 * CROP_X))
 static const ScreenMap kPillar = { PILLAR_SCALE_X, SCALE_Y, CROP_X - PILLAR_X / PILLAR_SCALE_X, CROP_Y,
-                                   PILLAR_X, PILLAR_X + PILLAR_W, PSP_SCREEN_H };
+                                   PILLAR_X, PILLAR_X + PILLAR_W, PSP_SCREEN_H, false, false };
+/* Square pixels, the 4:3 picture centred, the whole screen open to what is carried out to it (see WIDE_SCALE). */
+static const ScreenMap kWide = { WIDE_SCALE, SCALE_Y, WIDE_CROP_X, CROP_Y, 0, PSP_SCREEN_W, PSP_SCREEN_H, true, true };
+/* The same without the fills and the margin clears (see gfx_internal.h). */
+static const ScreenMap kWideView = { WIDE_SCALE, SCALE_Y, WIDE_CROP_X, CROP_Y, 0, PSP_SCREEN_W, PSP_SCREEN_H, true, false };
+
+typedef enum { SCREEN_WIDE, SCREEN_WIDE_VIEW, SCREEN_STRETCHED, SCREEN_PILLAR, SCREEN_MODES } ScreenMode;
+static const ScreenMap* const kModeMap[SCREEN_MODES] = { &kWide, &kWideView, &kStretched, &kPillar };
+static const char* const kModeName[SCREEN_MODES] = { "widescreen", "widescreen, view only", "stretched", "at 4:3" };
 
 /*
- * The game's thread asks for the other shape (START + SELECT); the worker
- * takes it up between frames, so no frame is drawn half in each. A colour
- * buffer last drawn in the other shape has that picture left in the bars and
- * is cleared when its turn comes (sBufStretched).
+ * The game's thread asks for the next shape (START + SELECT cycles widescreen,
+ * widescreen with the view only, stretched, 4:3); the worker takes it up between frames, so no frame is drawn
+ * half in each. A colour buffer last drawn in another shape has that picture
+ * left in the bars and is cleared when its turn comes (sBufMode).
+ *
+ * no_widescreen.txt starts the game stretched (as it was before there was a
+ * widescreen), no_stretch.txt at 4:3, wide_view.txt in widescreen with the
+ * view only.
  */
-static volatile int sStretchWanted = -1; /* -1: not yet read from no_stretch.txt */
-static bool sStretched = true;
-static bool sBufStretched[3] = { true, true, true };
-static ScreenMap sScreen = { SCALE_X, SCALE_Y, CROP_X, CROP_Y, 0, PSP_SCREEN_W, PSP_SCREEN_H };
-ScreenMap gMap = { SCALE_X, SCALE_Y, CROP_X, CROP_Y, 0, PSP_SCREEN_W, PSP_SCREEN_H };
+static volatile int sModeWanted = -1; /* -1: not yet read from the switch files */
+static int sMode = SCREEN_WIDE;
+static int sBufMode[3] = { SCREEN_WIDE, SCREEN_WIDE, SCREEN_WIDE };
+static ScreenMap sScreen = { WIDE_SCALE, SCALE_Y, WIDE_CROP_X, CROP_Y, 0, PSP_SCREEN_W, PSP_SCREEN_H, true, true };
+ScreenMap gMap = { WIDE_SCALE, SCALE_Y, WIDE_CROP_X, CROP_Y, 0, PSP_SCREEN_W, PSP_SCREEN_H, true, true };
 
 void rt_gfx_toggle_stretch(void) {
-    sStretchWanted = sStretchWanted == 0;
+    sModeWanted = (sModeWanted + 1) % SCREEN_MODES;
 }
 
 static void map_screen(void) {
@@ -64,22 +76,39 @@ static void map_screen(void) {
 
 /* Between frames: take up the shape asked for. */
 static void update_stretch(void) {
-    if (sStretchWanted < 0) {
-        sStretchWanted = !RT_SWITCH("no_stretch.txt");
+    if (sModeWanted < 0) {
+        sModeWanted = RT_SWITCH("no_stretch.txt")      ? SCREEN_PILLAR
+                      : RT_SWITCH("no_widescreen.txt") ? SCREEN_STRETCHED
+                      : RT_SWITCH("wide_view.txt")     ? SCREEN_WIDE_VIEW
+                                                       : SCREEN_WIDE;
+        rt_log("gfx: picture %s to start with (START + SELECT: widescreen, view only, stretched, 4:3)",
+               kModeName[sModeWanted]);
     }
-    bool wanted = sStretchWanted != 0;
-    if (wanted == sStretched) {
+    int wanted = sModeWanted;
+    if (wanted == sMode) {
         return;
     }
-    sStretched = wanted;
-    sScreen = wanted ? kStretched : kPillar;
+    sMode = wanted;
+    sScreen = *kModeMap[wanted];
     if (!gTarget.bound) {
         map_screen();
     }
-    rt_log("gfx: picture %s", wanted ? "stretched" : "at 4:3");
+    rt_log("gfx: picture %s", kModeName[wanted]);
 }
 
 /* ---- projection, viewport, scissor -------------------------------------- */
+
+/* gfx_wide_k as of the last projection upload (gfx_set_viewport uploads again if it has changed). */
+static float sUploadedK = 1.0f;
+
+/* Narrows a projection's clip x (its column 0, in the row-vector convention) by k. */
+static void scale_clip_x(Mat4 m, float k) {
+    if (k != 1.0f) {
+        for (int i = 0; i < 4; i++) {
+            m[i][0] *= k;
+        }
+    }
+}
 
 static const ScePspFMatrix4 kIdentity = {
     { 1.0f, 0.0f, 0.0f, 0.0f },
@@ -130,9 +159,12 @@ static void pin_depth(Mat4 m, int depth) {
 void gfx_upload_projection_depth(int variant, int depth) {
     ScePspFMatrix4 m;
     Mat4 tmp;
+    float k = gfx_wide_k();
+    sUploadedK = k;
     if (variant == PROJ_FOG) {
         Mat4 view;
         if (build_fog_view(view, tmp)) {
+            scale_clip_x(tmp, k);
             ScePspFMatrix4 v;
             to_gu_matrix(&v, (const float (*)[4])view);
             sceGuSetMatrix(GU_VIEW, &v);
@@ -147,6 +179,7 @@ void gfx_upload_projection_depth(int variant, int depth) {
         variant = PROJ_NORMAL;
     }
     memcpy(tmp, gRsp.proj, sizeof(Mat4));
+    scale_clip_x(tmp, k);
     if (variant == PROJ_FLAT_Z) {
         tmp[0][2] = tmp[1][2] = tmp[2][2] = tmp[3][2] = 0.0f;
     } else if (depth != DEPTH_NORMAL) {
@@ -206,6 +239,27 @@ bool gfx_compute_fog_range(float* near_out, float* far_out) {
     return true;
 }
 
+/*
+ * Widescreen: does the N64 viewport span the whole picture, centred? (The
+ * game's usual: 320 x 240 at 160, 120.) Then the GE's viewport spans the
+ * whole screen instead, and the projection's x is narrowed to match.
+ */
+static bool wide_viewport(void) {
+    if (!gMap.wide) {
+        return false;
+    }
+    float hw = gRsp.vscale[0] / 4.0f, mid = gRsp.vtrans[0] / 4.0f;
+    return hw >= 158.0f && hw <= 162.0f && mid >= 158.0f && mid <= 162.0f;
+}
+
+/* The viewport's width as it would be without that, over the width it has: what the projection's x is multiplied by. */
+float gfx_wide_k(void) {
+    if (!wide_viewport()) {
+        return 1.0f;
+    }
+    return (gRsp.vscale[0] / 4.0f * 2.0f * gMap.scale_x) / (float)(gMap.x1 - gMap.x0);
+}
+
 /* The N64 viewport on the GE's target, in whole pixels: a vertex lands at
  * (*cx + ndc x * *w / 2, *cy - ndc y * *h / 2). */
 void gfx_ge_viewport(int* cx, int* cy, int* w, int* h) {
@@ -215,13 +269,45 @@ void gfx_ge_viewport(int* cx, int* cy, int* w, int* h) {
     *cy = (int)((gRsp.vtrans[1] / 4.0f - gMap.crop_y) * gMap.scale_y + 0.5f);
     *w = (int)(hw * 2 + 0.5f);
     *h = (int)(hh * 2 + 0.5f);
+    if (wide_viewport()) {
+        *cx = (gMap.x0 + gMap.x1) / 2;
+        *w = gMap.x1 - gMap.x0;
+    }
+}
+
+/*
+ * What the game's viewports are, as the first sixteen different ones show up
+ * in the log (log.txt next to the EBOOT): the raw N64 values (quarter pixels),
+ * what the GE gets, and the factor on the projection's x in thousandths. Whether
+ * the main viewport is the 320 x 240 that wide_viewport() looks for is the
+ * thing to read there.
+ */
+static void log_viewport(int cx, int w, int h) {
+    static int16_t sSeen[16][5];
+    static int sSeenCount = 0;
+    if (!gMap.wide || sSeenCount >= 16) {
+        return;
+    }
+    int16_t key[5] = { gRsp.vscale[0], gRsp.vscale[1], gRsp.vtrans[0], gRsp.vtrans[1], (int16_t)w };
+    for (int i = 0; i < sSeenCount; i++) {
+        if (memcmp(sSeen[i], key, sizeof(key)) == 0) {
+            return;
+        }
+    }
+    memcpy(sSeen[sSeenCount++], key, sizeof(key));
+    rt_log("gfx: viewport scale %d %d trans %d %d -> GE centre %d width %d height %d, projection x * %d/1000",
+           gRsp.vscale[0], gRsp.vscale[1], gRsp.vtrans[0], gRsp.vtrans[1], cx, w, h, (int)(gfx_wide_k() * 1000.0f));
 }
 
 void gfx_set_viewport(void) {
     int cx, cy, w, h;
+    if (gfx_wide_k() != sUploadedK) {
+        gfx_set_projection(); /* the viewport's width decides the projection's x */
+    }
     gfx_update_snap();
     gfx_ge_viewport(&cx, &cy, &w, &h);
     sceGuViewport(GU_OFFSET_X + cx, GU_OFFSET_Y + cy, w, h);
+    log_viewport(cx, w, h);
 }
 
 void gfx_set_scissor(void) {
@@ -229,6 +315,10 @@ void gfx_set_scissor(void) {
     int y0 = (int)((gRdp.scissor[1] / 4.0f - gMap.crop_y) * gMap.scale_y);
     int x1 = (int)((gRdp.scissor[2] / 4.0f - gMap.crop_x) * gMap.scale_x + 0.5f);
     int y1 = (int)((gRdp.scissor[3] / 4.0f - gMap.crop_y) * gMap.scale_y + 0.5f);
+    if (gMap.wide && gRdp.scissor[0] <= 2 && gRdp.scissor[2] >= (N64_SCREEN_W - 1) * 4) {
+        x0 = gMap.x0; /* the whole width of the picture: the whole width of the screen */
+        x1 = gMap.x1;
+    }
     if (x1 > gMap.x1) x1 = gMap.x1;
     if (y1 > gMap.y1) y1 = gMap.y1;
     if (x0 < gMap.x0) x0 = gMap.x0;
@@ -299,10 +389,21 @@ void gfx_open_frame(void) {
     sceGuTexOffset(0.0f, 0.0f);
     sceGuDisable(GU_FOG);
     gGu.fog = 0;
-    if (sBufStretched[sDrawBuf] != sStretched) {
-        sBufStretched[sDrawBuf] = sStretched;
+    if (sBufMode[sDrawBuf] != sMode) {
+        sBufMode[sDrawBuf] = sMode;
         sceGuScissor(0, 0, PSP_SCREEN_W, PSP_SCREEN_H);
         sceGuClearColor(0xFF000000);
+        sceGuClear(GU_COLOR_BUFFER_BIT);
+    } else if (sScreen.wide_fill) {
+        /* The margins beside the 4:3 picture: what the game draws into them it
+         * draws again every frame, but a screen that fills only the picture
+         * (a full-screen image, say) would leave what an earlier frame put there. */
+        int m0 = (int)((0.0f - sScreen.crop_x) * sScreen.scale_x);       /* the picture's left edge */
+        int m1 = (int)((N64_SCREEN_W - sScreen.crop_x) * sScreen.scale_x + 0.5f); /* ... and its right */
+        sceGuClearColor(0xFF000000);
+        sceGuScissor(0, 0, m0, PSP_SCREEN_H);
+        sceGuClear(GU_COLOR_BUFFER_BIT);
+        sceGuScissor(m1, 0, PSP_SCREEN_W - m1, PSP_SCREEN_H);
         sceGuClear(GU_COLOR_BUFFER_BIT);
     }
     gfx_upload_projection(PROJ_NORMAL);
