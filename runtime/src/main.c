@@ -10,6 +10,7 @@
 
 #include "audio/me_audio.h"
 #include "rt.h"
+#include "hwcount.h"
 
 PSP_MODULE_INFO("AnimalForestPSP", PSP_MODULE_USER, 0, 1);
 PSP_MAIN_THREAD_ATTR(PSP_THREAD_ATTR_USER | PSP_THREAD_ATTR_VFPU);
@@ -21,11 +22,12 @@ PSP_HEAP_THRESHOLD_SIZE_KB(1024);
 
 /*
  * RDRAM, with zeros on both sides for generated code that steps just outside
- * it (MEM_PTR). Static, so it is at the same address in every run of a build:
- * the game threads' stacks hold pointers into it, and a capture keeps those
+ * it (MEM_PTR), and the Media Engine's game stack after it (RT_ME_STACK_TOP).
+ * Static, so it is at the same address in every run of a build: the game
+ * threads' stacks hold pointers into it, and a capture keeps those
  * (capture.c).
  */
-static uint8_t sRdramBlock[RDRAM_GUARD + RDRAM_SIZE + RDRAM_GUARD] __attribute__((aligned(64)));
+static uint8_t sRdramBlock[RDRAM_GUARD + RDRAM_SIZE + RDRAM_GUARD + RT_ME_STACK_SIZE] __attribute__((aligned(64)));
 uint8_t* g_rdram = sRdramBlock + RDRAM_GUARD;
 
 /* ROM layout facts (makerom entry code: bss clear + stack setup). */
@@ -237,6 +239,8 @@ int main(int argc, char* argv[]) {
     rt_rtc_init();
     rt_input_init();
     rt_gfx_init();
+    rt_hwc_bench();   /* debug: hwc_bench.txt */
+    rt_hwc_sections_init(); /* debug: hwc_sections.txt */
     rt_gfx_replay();  /* debug: replay.txt, never returns if present */
     rt_audio_init();
     rt_me_audio_init();
