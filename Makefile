@@ -13,7 +13,7 @@ PSPSDK := $(PSPDEV)/psp/sdk
 
 BUILD ?= build/psp
 GEN := work/recomp_out
-TITLE := Animal Forest
+TITLE := どうぶつの森
 TARGET := afpsp
 # English dialogue built by scripts/make_text_en.sh from the user's own GameCube disc;
 # packed into the EBOOT (see TEXT_PSAR below).
@@ -104,6 +104,7 @@ $(SFO):
 # nothing outside this repo is needed to build.
 ICON0 := assets/ICON0.PNG
 PIC1 := assets/PIC1.PNG
+SND0 := assets/SND0.AT3
 # The ROM the runtime loads. The English fan translation is a data-only patch of
 # the JP build (same dmadata, same code segment bar five .text bytes, which
 # recomp/af.jp.toml replicates), so it needs no separate recompile -- only this
@@ -113,6 +114,7 @@ BASEROM ?= work/af/baseroms/$(firstword $(shell cat $(GEN)/rom.txt 2>/dev/null) 
 
 ICON0_ARG = $(if $(wildcard $(ICON0)),$(ICON0),NULL)
 PIC1_ARG = $(if $(wildcard $(PIC1)),$(PIC1),NULL)
+SND0_ARG = $(if $(wildcard $(SND0)),$(SND0),NULL)
 
 # The English text goes into the EBOOT as its DATA.PSAR section, where the
 # runtime reads it (runtime/src/data.c): an installed EBOOT needs no loose text
@@ -125,8 +127,8 @@ $(TEXT_PSAR): $(TEXT_FILES) tools/make_psar.py
 	@mkdir -p $(dir $@)
 	@python3 tools/make_psar.py $@ $(TEXT_FILES)
 
-$(EBOOT): $(PRX) $(SFO) $(wildcard $(ICON0)) $(wildcard $(PIC1)) $(if $(TEXT_FILES),$(TEXT_PSAR))
-	@pack-pbp $@ $(SFO) $(ICON0_ARG) NULL NULL $(PIC1_ARG) NULL $(PRX) $(PSAR_ARG) >/dev/null
+$(EBOOT): $(PRX) $(SFO) $(wildcard $(ICON0)) $(wildcard $(PIC1)) $(wildcard $(SND0)) $(if $(TEXT_FILES),$(TEXT_PSAR))
+	@pack-pbp $@ $(SFO) $(ICON0_ARG) NULL NULL $(PIC1_ARG) $(SND0_ARG) $(PRX) $(PSAR_ARG) >/dev/null
 	@echo "Built $@$(if $(filter 2,$(words $(TEXT_FILES))), with the English text,)"
 	@$(if $(filter 2,$(words $(TEXT_FILES))),,echo "WARNING: $(TEXT_EN) and $(NAMES_EN) are not both there, so this EBOOT has no GameCube English text: run scripts/make_text_en.sh <disc image> and build again")
 
